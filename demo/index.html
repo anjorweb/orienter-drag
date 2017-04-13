@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, target-densitydpi=device-dpi, user-scalable=no"/>
+    <title>陀螺仪和拖动结合使用</title>
+    <script src="zepto.min.js"></script>
+    <script src="bone.min.js"></script>
+    <script src="orienter.js"></script>
+    <script src="gesture.js"></script>
+    <script src="three.min.js"></script>
+    <style>
+        * { margin:0; padding:0; }
+        html, body, #main{ width:100%; height:100%; overflow: hidden; }
+        p { position:absolute; left:0; top:0;  }
+    </style>
+</head>
+<body>
+<div id="main">
+    <p>整个场景旋转的话，需要限制了上下视角，默认已经限制</p>
+</div>
+<script>
+    //拖动+陀螺仪部分
+    var main = Bone.extend({}, Bone.Event, {
+        init: function(){
+            document.body.ontouchmove = function(e){
+                e.preventDefault();
+                return false;
+            };
+            var _self = this;
+            this.main = $("#main");
+            gesture.init(this.main);
+
+            this.initThree3D();
+
+            this.initControl();
+        },
+        drag: {lon: 0, lat: 0},
+        aim: {lat: 0, lon: 0},
+        fix: {lon: 0, lat: 0},
+        camera:null,
+        renderer:null,
+        scene:null,
+        lock: true,
+        group3D:null,
+        initThree3D: function(){
+            var _self = this;
+            _self.scene = new THREE.Scene();
+
+            //camera
+            _self.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 1, 10000);
+            _self.camera.position.z = 1000;
+            _self.camera.lookAt(new THREE.Vector3(0,0,0));
+
+            //render
+            _self.renderer = new THREE.WebGLRenderer({
+                antialias:true
+            });
+            _self.renderer.setSize(window.innerWidth, window.innerHeight);
+            _self.renderer.setClearColor(0xffffff);
+
+            //light
+            var light = new THREE.DirectionalLight(0xffffff);
+            var light2 = new THREE.DirectionalLight(0xffffff);
+            light.position.set(100, 0, 100);
+            light2.position.set(-100, 0, 100);
+            _self.scene.add(light);
+
+            _self.group3D = new THREE.Object3D();
+            //放入些mesh做实验
+            var material = new THREE.MeshLambertMaterial({
+                color:"#2194ce"
+            });
+            var cubeGeometry = new THREE.CubeGeometry(100, 100, 100);
+            var geo2 = new THREE.SphereGeometry(Math.random()*100-40, 100, 100);
+/*            var cube = new THREE.Mesh(cubeGeometry, material);
+            var cube2 = new THREE.Mesh(cubeGeometry, material);
+            cube.position.set(0, 300, 0);
+            cube2.position.set(0, -300, 0);
+
+            var mesh1 = new THREE.Mesh(geo2, material);
+            var mesh2 = new THREE.Mesh(geo2, material);
+            mesh1.position.set(300, 0, 0);
+            mesh2.position.set(-300, 0, 0);*/
+            for(var i=0; i<50; i++){
+                var spr = new THREE.Mesh(geo2, material);
+                spr.position.set(Math.random() * 800 - 400,Math.random() * 800 - 400,Math.random() * 800 - 400);
+                _self.group3D.add(spr);
+            }
+
+/*            _self.group3D.add(cube);
+            _self.group3D.add(cube2);
+            _self.group3D.add(mesh1);
+            _self.group3D.add(mesh2);*/
+
+            _self.scene.add(_self.group3D);
+
+
+            document.getElementById("main").appendChild(_self.renderer.domElement);
+        },
+        initControl: function(){
+            var _self = this;
+            gesture.on('move', function (obj) {
+                if (!_self.lock) {
+                    _self.drag.lon = (_self.drag.lon - obj.ax * 0.4) % 360;
+                    _self.drag.lat = Math.max(-90, Math.min(90, _self.drag.lat + obj.ay * 0.4));
+                    //_self.drag.lat = _self.drag.lat + obj.ay * 0.2;
+                }
+            });
+
+            var orienter = new Orienter();
+            orienter.onOrient = function (obj) {
+                _self.aim.lat = obj.lat;
+                _self.aim.lon = -obj.lon;
+
+                if (_self.lock) {
+                    _self.fix.lat = -_self.aim.lat;
+                    _self.fix.lon = -_self.aim.lon;
+                }
+            };
+            orienter.init();
+
+            this.lock = false;
+            this.animate();
+        },
+        animateId:null,
+        animate: function(){
+            var _self = this;
+            this.animateId = window.requestAnimationFrame(this.animate.bind(this));
+
+            var _lon = (this.aim.lon + this.fix.lon + this.drag.lon) % 360;
+            var _lat = (this.aim.lat + this.fix.lat + this.drag.lat) * 0.35;
+
+            if (_self.getRadian(_lon) - _self.group3D.rotation.y > _self.getRadian(180)) _self.group3D.rotation.y += _self.getRadian(360);
+            if (_self.getRadian(_lon) - _self.group3D.rotation.y < _self.getRadian(-180)) _self.group3D.rotation.y -= _self.getRadian(360);
+            _self.group3D.rotation.y += (_self.getRadian(_lon) - _self.group3D.rotation.y) * 0.3;
+            _self.group3D.rotation.x += (_self.getRadian(_lat) - _self.group3D.rotation.x) * 0.15;
+
+            _self.renderer.render(this.scene, this.camera);
+        },
+        //角度转弧度
+        getRadian:function(num){
+            return Math.PI / 180 * num;
+        }
+    });
+    main.init();
+</script>
+</body>
+</html>
